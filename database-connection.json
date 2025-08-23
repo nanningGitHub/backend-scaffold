@@ -1,0 +1,19 @@
+{
+  "name": "Node-CIL Local Database",
+  "type": "mongodb",
+  "hosts": [
+    {
+      "host": "localhost",
+      "port": 27017
+    }
+  ],
+  "options": {
+    "database": "node-cil",
+    "authSource": "admin",
+    "readPreference": "primary",
+    "ssl": false,
+    "serverSelectionTimeoutMS": 5000,
+    "socketTimeoutMS": 45000
+  },
+  "connectionString": "mongodb://localhost:27017/node-cil"
+}
