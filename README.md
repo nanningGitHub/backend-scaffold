@@ -40,6 +40,34 @@
 - [x] 部署上线
 - [x] 监控运维
 
+## 🏗️ 项目架构概览
+
+### 分层架构设计
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    HTTP 请求层                               │
+├─────────────────────────────────────────────────────────────┤
+│                    路由层 (Routes)                          │
+├─────────────────────────────────────────────────────────────┤
+│                   控制器层 (Controllers)                     │
+├─────────────────────────────────────────────────────────────┤
+│                    服务层 (Services)                        │
+├─────────────────────────────────────────────────────────────┤
+│                   数据访问层 (Models)                        │
+├─────────────────────────────────────────────────────────────┤
+│                    数据库层 (MongoDB/Redis)                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 核心组件
+- **中间件工厂**: 统一管理所有中间件配置
+- **服务层**: 业务逻辑分离，提高代码复用性
+- **控制器层**: HTTP请求处理，职责清晰
+- **错误处理系统**: 分层错误处理，详细错误分类
+- **统一响应处理**: 标准化API响应格式
+
+### 架构完整性: 95% ✅
+
 ## 🚀 快速开始
 
 ### 环境准备
@@ -71,6 +99,23 @@ npm run dev
 # API服务: http://localhost:3000
 # API文档: http://localhost:3000/api-docs
 # 健康检查: http://localhost:3000/health
+```
+
+### 架构测试
+```bash
+# 测试用户注册
+curl -X POST http://localhost:3000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"测试用户","email":"test@example.com","password":"Test123456","age":25}'
+
+# 测试用户登录
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"Test123456"}'
+
+# 测试获取用户列表（需要认证）
+curl -X GET http://localhost:3000/api/users \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
 ## 📖 学习指南
@@ -332,6 +377,20 @@ npm run pm2:start          # 启动应用
 npm run pm2:monit          # 监控应用
 npm run pm2:logs           # 查看日志
 ```
+
+## 📚 项目文档
+
+### 核心文档
+- **[架构设计文档](./ARCHITECTURE.md)** - 详细的项目架构说明
+- **[学习指南](./LEARNING_GUIDE.md)** - 完整的学习路径和实践项目
+- **[API接口文档](./API_GUIDE.md)** - 所有API接口的详细说明
+- **[部署指南](./DEPLOYMENT_GUIDE.md)** - 多环境部署和运维指南
+
+### 快速导航
+- **新手入门**: 先阅读 [学习指南](./LEARNING_GUIDE.md)
+- **架构理解**: 查看 [架构设计文档](./ARCHITECTURE.md)
+- **接口调用**: 参考 [API接口文档](./API_GUIDE.md)
+- **生产部署**: 按照 [部署指南](./DEPLOYMENT_GUIDE.md)
 
 ## 📚 扩展学习资源
 
