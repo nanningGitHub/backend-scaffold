@@ -1,76 +1,27 @@
 const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
-const slowDown = require('express-slow-down');
-const compression = require('compression');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 require('dotenv').config();
 
+// 导入中间件工厂
+const MiddlewareFactory = require('./middleware');
+
 // 数据库连接
 const connectDB = require('./config/database');
 // Redis连接
-const connectRedis = require('./config/redis');
+const redisClient = require('./config/redis');
 // 日志配置
-const logger = require('./config/logger');
+const { logger } = require('./config/logger');
 // 任务队列
 const queue = require('./config/queue');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 安全中间件
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-    },
-  },
-}));
-
-// 压缩中间件
-app.use(compression());
-
-// CORS配置
-app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
-
-// 请求限流
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15分钟
-  max: 100, // 限制每个IP 15分钟内最多100个请求
-  message: {
-    error: '请求过于频繁，请稍后再试',
-    retryAfter: Math.ceil(15 * 60 / 1000)
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
+// 应用中间件工厂
+MiddlewareFactory.getAll().forEach(middleware => {
+  app.use(middleware);
 });
-
-// 慢速限流
-const speedLimiter = slowDown({
-  windowMs: 15 * 60 * 1000, // 15分钟
-  delayAfter: 50, // 50个请求后开始延迟
-  delayMs: 500 // 每个请求延迟500ms
-});
-
-app.use('/api/', limiter, speedLimiter);
-
-// 日志中间件
-app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
-
-// 解析JSON请求体
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Swagger配置
 const swaggerOptions = {
@@ -104,7 +55,7 @@ const swaggerOptions = {
       bearerAuth: []
     }]
   },
-  apis: ['./src/routes/*.js']
+  apis: ['./src/routes/*.js', './src/controllers/*.js']
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
@@ -137,7 +88,8 @@ app.get('/', (req, res) => {
       upload: '/api/upload',
       notifications: '/api/notifications'
     },
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    requestId: req.id
   });
 });
 
@@ -150,15 +102,39 @@ const { globalErrorHandler } = require('./middleware/errorHandler');
 app.use(globalErrorHandler);
 
 // 优雅关闭
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, shutting down gracefully');
-  process.exit(0);
-});
+const gracefulShutdown = async (signal) => {
+  logger.info(`${signal} received, shutting down gracefully`);
+  
+  try {
+    // 关闭任务队列
+    if (queue && typeof queue.stop === 'function') {
+      await queue.stop();
+      logger.info('任务队列已关闭');
+    }
+    
+    // 关闭数据库连接
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState === 1) {
+      await mongoose.connection.close();
+      logger.info('数据库连接已关闭');
+    }
+    
+    // 关闭Redis连接
+    if (redisClient && typeof redisClient.disconnect === 'function') {
+      await redisClient.disconnect();
+      logger.info('Redis连接已关闭');
+    }
+    
+    logger.info('所有连接已关闭，进程退出');
+    process.exit(0);
+  } catch (error) {
+    logger.error('优雅关闭过程中发生错误:', error);
+    process.exit(1);
+  }
+};
 
-process.on('SIGINT', () => {
-  logger.info('SIGINT received, shutting down gracefully');
-  process.exit(0);
-});
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // 启动服务器
 const startServer = async () => {
@@ -168,7 +144,7 @@ const startServer = async () => {
     logger.info('✅ MongoDB连接成功');
     
     // 连接Redis
-    await connectRedis();
+    await redisClient.connect();
     logger.info('✅ Redis连接成功');
     
     // 启动任务队列
@@ -181,6 +157,7 @@ const startServer = async () => {
       logger.info(`📚 API文档: http://localhost:${PORT}/api-docs`);
       logger.info(`🗄️ 数据库: MongoDB + Redis`);
       logger.info(`🌍 环境: ${process.env.NODE_ENV || 'development'}`);
+      logger.info(`🔧 架构: 分层架构 + 中间件工厂`);
     });
   } catch (error) {
     logger.error('服务器启动失败:', error);

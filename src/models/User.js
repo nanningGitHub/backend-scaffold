@@ -53,8 +53,7 @@ userSchema.virtual('fullName').get(function() {
   return `${this.name} (${this.email})`;
 });
 
-// 索引
-userSchema.index({ email: 1 });
+// 索引（email字段已有unique索引，不需要重复创建）
 userSchema.index({ name: 1 });
 userSchema.index({ createdAt: -1 });
 
